@@ -1,10 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the public folder
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Replace with your Gemini API key
 const GEMINI_API_KEY = 'AIzaSyBahqbkfXJa_6ZsREbOgXdHL3XEoK_o5sk';
@@ -24,5 +28,5 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
