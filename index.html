@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Genix AI Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background: #343541;
+            min-height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            background: #202123;
+            color: #fff;
+            padding: 20px 0;
+            font-size: 2rem;
+            font-weight: bold;
+            text-align: center;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #2c2d30;
+            flex-shrink: 0;
+        }
+        .chat-body {
+            flex: 1;
+            overflow-y: scroll;
+            padding: 32px 0 120px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100vw;
+            height: 100%;
+            /* Remove max-width and margin */
+            scrollbar-width: thin;
+            scrollbar-color: #3b82f6 #23272f;
+        }
+        .chat-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        .chat-body::-webkit-scrollbar-thumb {
+            background: #3b82f6;
+            border-radius: 4px;
+        }
+        .chat-body::-webkit-scrollbar-track {
+            background: #23272f;
+        }
+        .message {
+            max-width: 70%;
+            padding: 16px 22px;
+            border-radius: 12px;
+            font-size: 1.08rem;
+            word-break: break-word;
+            margin-bottom: 2px;
+            line-height: 1.6;
+        }
+        .user {
+            background: #3b82f6;
+            color: #fff;
+            align-self: flex-end;
+        }
+        .ai {
+            background: #444654;
+            color: #e5e7eb;
+            align-self: flex-start;
+        }
+        .typing {
+            color: #22c55e;
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 1rem;
+            padding-left: 8px;
+        }
+        .chat-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100vw;
+            background: #343541;
+            border-top: 1px solid #2c2d30;
+            padding: 24px 0;
+            display: flex;
+            justify-content: center;
+            z-index: 10;
+        }
+        .footer-inner {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            gap: 10px;
+        }
+        .form-control {
+            border-radius: 12px;
+            font-size: 1.08rem;
+            background: #40414f;
+            color: #fff;
+            border: 1px solid #444654;
+            padding: 12px 18px;
+            width: 100%;
+        }
+        .form-control:focus {
+            background: #23272f;
+            color: #fff;
+            border: 1.5px solid #3b82f6;
+            box-shadow: none;
+        }
+        .btn-primary {
+            background: #3b82f6;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.08rem;
+            padding: 0 28px;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        pre {
+            background: #23272f !important;
+            color: #22c55e !important;
+            font-size: 0.98rem;
+            border-radius: 8px;
+            padding: 12px;
+            overflow-x: auto;
+            margin-bottom: 8px;
+        }
+        code {
+            font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+        }
+        @media (max-width: 900px) {
+            .footer-inner {
+                max-width: 100vw;
+                border-radius: 0;
+            }
+        }
+        .loader {
+          border: 4px solid #444654;
+          border-top: 4px solid #22c55e;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          animation: spin 0.8s linear infinite;
+          display: inline-block;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg);}
+          100% { transform: rotate(360deg);}
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-header">Genix AI</div>
+    <div id="chat" class="chat-body"></div>
+    <div id="typing" class="typing" style="display:none;">Genix AI is typing...</div>
+    <form id="chatForm" class="chat-footer">
+        <div class="footer-inner">
+            <input id="userInput" type="text" class="form-control flex-1" placeholder="Type your message..." autocomplete="off" required>
+            <button class="btn btn-primary">Send</button>
+        </div>
+    </form>
+    <script>
+        const chat = document.getElementById('chat');
+        const chatForm = document.getElementById('chatForm');
+        const userInput = document.getElementById('userInput');
+        const typing = document.getElementById('typing');
+
+        function showLoadingSpinner() {
+            removeLoadingSpinner();
+            const spinnerMsg = document.createElement('div');
+            spinnerMsg.className = 'message ai';
+            spinnerMsg.id = 'ai-spinner-msg';
+            spinnerMsg.innerHTML = `<span class="flex items-center"><span class="loader mr-2"></span> Genix AI is thinking...</span>`;
+            chat.appendChild(spinnerMsg);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function removeLoadingSpinner() {
+            const spinnerMsg = document.getElementById('ai-spinner-msg');
+            if (spinnerMsg) spinnerMsg.remove();
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (!message) return;
+            addMessage(message, 'user');
+            userInput.value = '';
+            typing.style.display = 'block';
+            showLoadingSpinner();
+
+            // Disable input and button
+            userInput.disabled = true;
+            chatForm.querySelector('button').disabled = true;
+
+            try {
+                const res = await fetch('http://localhost:3001/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const data = await res.json();
+                removeLoadingSpinner();
+                addMessage(data.text, 'ai', true);
+            } catch (err) {
+                removeLoadingSpinner();
+                addMessage('Error connecting to Genix AI API.', 'ai');
+            }
+            typing.style.display = 'none';
+
+            // Re-enable input and button
+            userInput.disabled = false;
+            chatForm.querySelector('button').disabled = false;
+            userInput.focus();
+        });
+
+        function addMessage(text, sender, animated = false) {
+            const msg = document.createElement('div');
+            msg.className = `message ${sender}`;
+            chat.appendChild(msg);
+
+            function isNearBottom() {
+                return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 60;
+            }
+
+            if (animated) {
+                let i = 0;
+                function typeChar() {
+                    msg.innerHTML = formatAIResponse(text.slice(0, i));
+                    if (isNearBottom()) {
+                        chat.scrollTop = chat.scrollHeight;
+                    }
+                    if (i < text.length) {
+                        i++;
+                        setTimeout(typeChar, 12);
+                    }
+                }
+                typeChar();
+            } else {
+                msg.innerHTML = sender === 'ai' ? formatAIResponse(text) : text;
+                if (isNearBottom()) {
+                    chat.scrollTop = chat.scrollHeight;
+                }
+            }
+        }
+
+        function formatAIResponse(text) {
+            text = text.replace(/```([\s\S]*?)```/g, function(match, code) {
+                code = code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                return `<pre><code>${code}</code></pre>`;
+            });
+            text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            text = text.replace(/(\d+\.) (.*?)(?=\n|$)/g, '<li>$1 $2</li>');
+            text = text.replace(/(<li>.*<\/li>)+/g, '<ul>$&</ul>');
+            text = text.replace(/\n/g, '<br>');
+            return text;
+        }
+    </script>
+</body>
+</html>
